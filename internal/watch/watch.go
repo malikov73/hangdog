@@ -6,12 +6,16 @@ package watch
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/malikov73/hangdog/internal/dump"
@@ -34,16 +38,22 @@ type Config struct {
 // set one) -timeout 0, so it is the sole timeout authority.
 func Run(cfg Config, cmd []string) (int, error) {
 	if len(cmd) == 0 {
-		return 2, fmt.Errorf("no command to run")
+		return 2, errors.New("no command to run")
+	}
+	if !proc.Supported {
+		return 2, fmt.Errorf("hangdog is unsupported on %s: it relies on SIGQUIT; run `go test` directly", runtime.GOOS)
 	}
 	prepared := InjectFlags(cmd)
 
 	c := exec.Command(prepared[0], prepared[1:]...)
 	c.Env = append(os.Environ(), "GOTRACEBACK=all")
 	c.Stderr = cfg.Stderr
+	// Own process group: lets the watchdog terminate the whole test tree at once,
+	// and keeps a CI cancel (SIGTERM to hangdog) from orphaning the child.
+	proc.SetProcessGroup(c)
 	stdout, err := c.StdoutPipe()
 	if err != nil {
-		return 1, err
+		return 1, fmt.Errorf("stdout pipe: %w", err)
 	}
 	if err := c.Start(); err != nil {
 		return 1, fmt.Errorf("start %q: %w", prepared[0], err)
@@ -59,6 +69,8 @@ func Run(cfg Config, cmd []string) (int, error) {
 
 	done := make(chan struct{})
 	go st.watchdog(pid, done)
+	stop := st.handleSignals(pid, done)
+	defer stop()
 
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
@@ -79,10 +91,35 @@ func Run(cfg Config, cmd []string) (int, error) {
 	if c.ProcessState != nil {
 		exit = c.ProcessState.ExitCode()
 	}
+	if exit < 0 {
+		// The child was terminated by a signal (typically our own SIGKILL
+		// escalation); ExitCode reports -1, which os.Exit would surface as 255.
+		exit = 1
+	}
 	if exit == 0 && waitErr != nil {
 		exit = 1
 	}
 	return exit, nil
+}
+
+// handleSignals force-terminates the whole test process group if hangdog itself is
+// asked to stop (Ctrl-C, CI cancel, systemd stop). Because the child runs in its
+// own process group it would otherwise be orphaned and — with the -timeout 0
+// hangdog injected — leak forever. The returned func stops watching.
+func (s *state) handleSignals(pgid int, done <-chan struct{}) (stop func()) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-done:
+		case sig := <-ch:
+			fmt.Fprintf(s.cfg.Stderr, "\n[hangdog] received %s; terminating the test run\n", sig)
+			if err := proc.KillGroup(pgid); err != nil {
+				fmt.Fprintf(s.cfg.Stderr, "[hangdog] kill process group %d: %v\n", pgid, err)
+			}
+		}
+	}()
+	return func() { signal.Stop(ch) }
 }
 
 type state struct {
@@ -141,19 +178,11 @@ func (s *state) watchdog(pid int, done <-chan struct{}) {
 			return
 		case <-t.C:
 			s.mu.Lock()
-			if s.triggered || !s.anyRunning() {
+			if s.triggered {
 				s.mu.Unlock()
 				continue
 			}
-			idle := time.Since(s.last)
-			elapsed := time.Since(s.start)
-			var reason string
-			switch {
-			case s.cfg.Idle > 0 && idle >= s.cfg.Idle:
-				reason = fmt.Sprintf("idle %s", s.cfg.Idle)
-			case s.cfg.Budget > 0 && elapsed >= s.cfg.Budget:
-				reason = fmt.Sprintf("budget %s", s.cfg.Budget)
-			}
+			reason := triggerReason(s.cfg, time.Since(s.last), time.Since(s.start), s.anyRunning())
 			if reason == "" {
 				s.mu.Unlock()
 				continue
@@ -165,29 +194,43 @@ func (s *state) watchdog(pid int, done <-chan struct{}) {
 			s.mu.Unlock()
 
 			fmt.Fprintf(s.cfg.Stderr, "\n[hangdog] %s exceeded; stuck package(s): %s\n", reason, strings.Join(stuck, " "))
-			targets := s.signal(pid, stuck)
-			go s.escalate(targets, done)
+			s.signal(pid, stuck)
+			go s.escalate(pid, done)
 		}
 	}
 }
 
-// graceKill is how long hangdog waits after SIGQUIT before force-killing a test
-// binary that ignored it — so the watchdog itself can never hang.
-const graceKill = 15 * time.Second
-
-func (s *state) escalate(pids []int, done <-chan struct{}) {
-	if len(pids) == 0 {
-		return
+// triggerReason decides whether the run should be interrupted, and why. The idle
+// trigger is gated on a test being in flight so a slow build phase (which emits no
+// test2json events) cannot false-positive; the budget trigger is pure wall-clock
+// and fires unconditionally, so a hang in TestMain/init before any test starts is
+// still caught. Idle takes precedence so the report names the silence, not the cap.
+func triggerReason(cfg Config, idle, elapsed time.Duration, anyRunning bool) string {
+	switch {
+	case cfg.Idle > 0 && anyRunning && idle >= cfg.Idle:
+		return fmt.Sprintf("idle %s", cfg.Idle)
+	case cfg.Budget > 0 && elapsed >= cfg.Budget:
+		return fmt.Sprintf("budget %s", cfg.Budget)
 	}
+	return ""
+}
+
+// graceKill is how long hangdog waits after the first trigger before force-killing
+// the whole test process group. It is a var so tests can shorten it.
+var graceKill = 15 * time.Second
+
+// escalate guarantees the run ends. After a trigger, signal() delivers a targeted
+// SIGQUIT to capture the culprit's dump; if the run has not ended graceKill later
+// (the binary ignored SIGQUIT, could not be located, or another package is now
+// hung), escalate SIGKILLs the entire process group so hangdog itself never blocks.
+func (s *state) escalate(pgid int, done <-chan struct{}) {
 	select {
 	case <-done:
 		// The run ended (the dump was flushed); nothing to escalate.
 	case <-time.After(graceKill):
-		for _, pid := range pids {
-			fmt.Fprintf(s.cfg.Stderr, "[hangdog] SIGQUIT ignored after %s; SIGKILL -> pid %d\n", graceKill, pid)
-			if err := proc.Kill(pid); err != nil {
-				fmt.Fprintf(s.cfg.Stderr, "[hangdog] kill pid %d: %v\n", pid, err)
-			}
+		fmt.Fprintf(s.cfg.Stderr, "[hangdog] run did not end %s after trigger; SIGKILL -> process group %d\n", graceKill, pgid)
+		if err := proc.KillGroup(pgid); err != nil {
+			fmt.Fprintf(s.cfg.Stderr, "[hangdog] kill process group %d: %v\n", pgid, err)
 		}
 	}
 }
@@ -211,34 +254,32 @@ func (s *state) stuckPackages() []string {
 	return out
 }
 
-// signal delivers SIGQUIT to the child test binaries of the stuck packages,
-// falling back to every discovered .test child if the package cannot be mapped.
-// It returns the PIDs it signalled so the caller can escalate to SIGKILL.
-func (s *state) signal(pid int, stuck []string) []int {
+// signal delivers SIGQUIT to the stuck packages' child test binaries so the
+// runtime prints a goroutine dump, falling back to every discovered .test child
+// when a package cannot be mapped. It is best-effort: escalate() is the guarantee
+// that the run ends, so a discovery failure here only costs the focused dump, not
+// termination.
+func (s *state) signal(pid int, stuck []string) {
 	bins, err := proc.TestBinaries(pid)
 	if err != nil {
-		fmt.Fprintf(s.cfg.Stderr, "[hangdog] cannot locate test binaries: %v\n", err)
-		return nil
+		fmt.Fprintf(s.cfg.Stderr, "[hangdog] cannot locate test binaries: %v; will force-kill the run\n", err)
+		return
 	}
 	if len(bins) == 0 {
-		fmt.Fprintln(s.cfg.Stderr, "[hangdog] no child .test binary found to signal")
-		return nil
+		fmt.Fprintln(s.cfg.Stderr, "[hangdog] no child .test binary found to signal; will force-kill the run")
+		return
 	}
 
 	targets := matchTargets(bins, stuck)
 	if len(targets) == 0 {
 		targets = bins // fall back to all
 	}
-	pids := make([]int, 0, len(targets))
 	for _, b := range targets {
 		fmt.Fprintf(s.cfg.Stderr, "[hangdog] SIGQUIT -> %s (pid %d)\n", b.Name, b.PID)
 		if err := proc.Quit(b.PID); err != nil {
 			fmt.Fprintf(s.cfg.Stderr, "[hangdog] signal pid %d: %v\n", b.PID, err)
-			continue
 		}
-		pids = append(pids, b.PID)
 	}
-	return pids
 }
 
 // matchTargets selects the test binaries whose working directory matches the
