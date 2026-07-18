@@ -1,0 +1,131 @@
+goroutine 0 gp=0x100fa85c0 m=0 mp=0x100fa9000 [idle]:
+runtime.kevent(0x3, 0x0, 0x0, 0x16f1bdd30, 0x40, 0x16f1bdcf8)
+	/usr/local/go/src/runtime/sys_darwin.go:439 +0x20 fp=0x16f1bdca0 sp=0x16f1bdc80 pc=0x100ca76c0
+runtime.netpoll(0x34630b86e08)
+	/usr/local/go/src/runtime/netpoll_kqueue.go:110 +0x104 fp=0x16f1be540 sp=0x16f1bdca0 pc=0x100c823d4
+runtime.findRunnable()
+	/usr/local/go/src/runtime/proc.go:3754 +0x9c8 fp=0x16f1be710 sp=0x16f1be540 pc=0x100c8e7e8
+runtime.schedule()
+	/usr/local/go/src/runtime/proc.go:4164 +0x90 fp=0x16f1be750 sp=0x16f1be710 pc=0x100c90190
+runtime.park_m(0x3a20de5bb860)
+	/usr/local/go/src/runtime/proc.go:4304 +0x244 fp=0x16f1be7b0 sp=0x16f1be750 pc=0x100c90614
+runtime.mcall()
+	/usr/local/go/src/runtime/asm_arm64.s:339 +0x54 fp=0x16f1be7c0 sp=0x16f1be7b0 pc=0x100cc1964
+
+goroutine 1 gp=0x3a20de5ba1e0 m=nil [chan receive]:
+runtime.gopark(0x1de67baa8?, 0x100c5b07c?, 0x8?, 0xc1?, 0x1030a82e0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de67ba70 sp=0x3a20de67ba50 pc=0x100cbc76c
+runtime.chanrecv(0x3a20de5de2a0, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x470 fp=0x3a20de67baf0 sp=0x3a20de67ba70 pc=0x100c52600
+runtime.chanrecv1(0x100f7ba80?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x14 fp=0x3a20de67bb20 sp=0x3a20de67baf0 pc=0x100c52154
+testing.runFuzzTests({0x100f7d078, 0x100fce8e0}, {0x100f9d870, 0x1, 0x3a20de5c61c8?}, {0x100fa2960?, 0x5?, 0x0?})
+	/usr/local/go/src/testing/fuzz.go:538 +0x718 fp=0x3a20de67bc70 sp=0x3a20de67bb20 pc=0x100d26318
+testing.(*M).Run(0x3a20de64a6e0)
+	/usr/local/go/src/testing/testing.go:2444 +0x5a0 fp=0x3a20de67beb0 sp=0x3a20de67bc70 pc=0x100d2eb10
+main.main()
+	_testmain.go:56 +0x80 fp=0x3a20de67bf30 sp=0x3a20de67beb0 pc=0x100db1270
+runtime.main()
+	/usr/local/go/src/runtime/proc.go:290 +0x2b4 fp=0x3a20de67bfd0 sp=0x3a20de67bf30 pc=0x100c88314
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de67bfd0 sp=0x3a20de67bfd0 pc=0x100cc3a14
+
+goroutine 2 gp=0x3a20de5ba780 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de61cf90 sp=0x3a20de61cf70 pc=0x100cbc76c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.forcegchelper()
+	/usr/local/go/src/runtime/proc.go:375 +0xb4 fp=0x3a20de61cfd0 sp=0x3a20de61cf90 pc=0x100c88634
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de61cfd0 sp=0x3a20de61cfd0 pc=0x100cc3a14
+created by runtime.init.7 in goroutine 1
+	/usr/local/go/src/runtime/proc.go:363 +0x24
+
+goroutine 3 gp=0x3a20de5bb0e0 m=nil [GC sweep wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de61d770 sp=0x3a20de61d750 pc=0x100cbc76c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.bgsweep(0x3a20de63c000)
+	/usr/local/go/src/runtime/mgcsweep.go:279 +0x9c fp=0x3a20de61d7b0 sp=0x3a20de61d770 pc=0x100c71d2c
+runtime.gcenable.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:214 +0x20 fp=0x3a20de61d7d0 sp=0x3a20de61d7b0 pc=0x100c63250
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de61d7d0 sp=0x3a20de61d7d0 pc=0x100cc3a14
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:214 +0x6c
+
+goroutine 4 gp=0x3a20de5bb2c0 m=nil [GC scavenge wait]:
+runtime.gopark(0x3a20de63c000?, 0x100dcc5b8?, 0x1?, 0x0?, 0x3a20de5bb2c0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de61df60 sp=0x3a20de61df40 pc=0x100cbc76c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x100fa81e0)
+	/usr/local/go/src/runtime/mgcscavenge.go:425 +0x5c fp=0x3a20de61df90 sp=0x3a20de61df60 pc=0x100c6f91c
+runtime.bgscavenge(0x3a20de63c000)
+	/usr/local/go/src/runtime/mgcscavenge.go:653 +0x44 fp=0x3a20de61dfb0 sp=0x3a20de61df90 pc=0x100c6fe54
+runtime.gcenable.gowrap2()
+	/usr/local/go/src/runtime/mgc.go:215 +0x20 fp=0x3a20de61dfd0 sp=0x3a20de61dfb0 pc=0x100c63210
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de61dfd0 sp=0x3a20de61dfd0 pc=0x100cc3a14
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:215 +0xac
+
+goroutine 5 gp=0x3a20de5bb4a0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x0?, 0xb8?, 0xc5?, 0x100cbd464?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de61c580 sp=0x3a20de61c560 pc=0x100cbc76c
+runtime.runFinalizers()
+	/usr/local/go/src/runtime/mfinal.go:210 +0x100 fp=0x3a20de61c7d0 sp=0x3a20de61c580 pc=0x100c62320
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de61c7d0 sp=0x3a20de61c7d0 pc=0x100cc3a14
+created by runtime.createfing in goroutine 1
+	/usr/local/go/src/runtime/mfinal.go:172 +0x78
+
+goroutine 6 gp=0x3a20de5bb680 m=nil [chan receive]:
+runtime.gopark(0x1de646b18?, 0x100c5b07c?, 0x8?, 0xc1?, 0x1030a82e0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de646ae0 sp=0x3a20de646ac0 pc=0x100cbc76c
+runtime.chanrecv(0x3a20de5de460, 0x0, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x470 fp=0x3a20de646b60 sp=0x3a20de646ae0 pc=0x100c52600
+runtime.chanrecv1(0x100f7bb28?, 0x0?)
+	/usr/local/go/src/runtime/chan.go:509 +0x14 fp=0x3a20de646b90 sp=0x3a20de646b60 pc=0x100c52154
+testing.(*F).Fuzz.func1({0x100f7a480, 0x3a20de788008}, {{0x0, 0x0}, {0x3a20de5c8288, 0x6}, {0x0, 0x0, 0x0}, {0x3a20de5e23b0, ...}, ...})
+	/usr/local/go/src/testing/fuzz.go:343 +0x4bc fp=0x3a20de646ca0 sp=0x3a20de646b90 pc=0x100d255ac
+testing.(*F).Fuzz(0x3a20de788008, {0x100f39340, 0x100f77d10})
+	/usr/local/go/src/testing/fuzz.go:408 +0x794 fp=0x3a20de646f20 sp=0x3a20de646ca0 pc=0x100d24c54
+blab.FuzzHang(0x3a20de788008)
+	/repo/fuzz_test.go:10 +0x7c fp=0x3a20de646f60 sp=0x3a20de646f20 pc=0x100db0e5c
+testing.fRunner(0x3a20de788008, 0x100f77c60)
+	/usr/local/go/src/testing/fuzz.go:738 +0xa0 fp=0x3a20de646fb0 sp=0x3a20de646f60 pc=0x100d26cb0
+testing.runFuzzTests.gowrap1()
+	/usr/local/go/src/testing/fuzz.go:537 +0x20 fp=0x3a20de646fd0 sp=0x3a20de646fb0 pc=0x100d26440
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de646fd0 sp=0x3a20de646fd0 pc=0x100cc3a14
+created by testing.runFuzzTests in goroutine 1
+	/usr/local/go/src/testing/fuzz.go:537 +0x708
+
+goroutine 7 gp=0x3a20de5bb860 m=nil [sleep]:
+runtime.gopark(0xc77efec40d49?, 0x100d05018?, 0x4?, 0x0?, 0x4?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x3a20de67d6f0 sp=0x3a20de67d6d0 pc=0x100cbc76c
+time.Sleep(0x34630b8a000)
+	/usr/local/go/src/runtime/time.go:363 +0x150 fp=0x3a20de67d750 sp=0x3a20de67d6f0 pc=0x100cc02b0
+blab.FuzzHang.func1(0x3a20de67d7a8?, {0x100cfc4b8?, 0x0?, 0x0?})
+	/repo/fuzz_test.go:11 +0x28 fp=0x3a20de67d770 sp=0x3a20de67d750 pc=0x100db1158
+runtime.call32(0x3a20de64ce10, 0x100f77d10, 0x0, 0x0, 0x0, 0x20, 0x3a20de67d9d8)
+	/usr/local/go/src/runtime/asm_arm64.s:670 +0x70 fp=0x3a20de67d7a0 sp=0x3a20de67d770 pc=0x100cc1f90
+runtime.reflectcall(0x100f33680?, 0x3a20de5c6288?, 0x4?, 0xdbf5f1?, 0x1?, 0x12?, 0x100f33680?)
+	<autogenerated>:1 +0x24 fp=0x3a20de67d7e0 sp=0x3a20de67d7a0 pc=0x100cc53d4
+reflect.Value.call({0x100f39340?, 0x100f77d10?, 0x3a20de647e28?}, {0x100dbb726, 0x4}, {0x3a20de64cde0, 0x2, 0x0?})
+	/usr/local/go/src/reflect/value.go:586 +0xabc fp=0x3a20de67ddb0 sp=0x3a20de67d7e0 pc=0x100d007bc
+reflect.Value.Call({0x100f39340?, 0x100f77d10?, 0x3a20de7840f0?}, {0x3a20de64cde0?, 0x100f76dc0?, 0x100d2d0cf?})
+	/usr/local/go/src/reflect/value.go:369 +0x94 fp=0x3a20de67de30 sp=0x3a20de67ddb0 pc=0x100cffc64
+testing.(*F).Fuzz.func1.1(0x3a20de782248?)
+	/usr/local/go/src/testing/fuzz.go:341 +0x258 fp=0x3a20de67df60 sp=0x3a20de67de30 pc=0x100d25968
+testing.tRunner(0x3a20de782248, 0x3a20de78c000)
+	/usr/local/go/src/testing/testing.go:2036 +0xc4 fp=0x3a20de67dfb0 sp=0x3a20de67df60 pc=0x100d2d164
+testing.(*F).Fuzz.func1.gowrap1()
+	/usr/local/go/src/testing/fuzz.go:328 +0x20 fp=0x3a20de67dfd0 sp=0x3a20de67dfb0 pc=0x100d256f0
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x3a20de67dfd0 sp=0x3a20de67dfd0 pc=0x100cc3a14
+created by testing.(*F).Fuzz.func1 in goroutine 6
+	/usr/local/go/src/testing/fuzz.go:328 +0x4ac

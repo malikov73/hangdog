@@ -18,9 +18,18 @@ var (
 	// modern runtime form that carries scheduler fields
 	// ("goroutine 21 gp=0x.. m=nil [chan receive]:").
 	headerRe = regexp.MustCompile(`^goroutine (\d+).*\[([^\]]*)\]:`)
-	// A user test frame: <import/path>.TestXxx( — captures import path and test name.
-	testFrameRe = regexp.MustCompile(`^(\S+)\.(Test\w+)\(`)
-	createdByRe = regexp.MustCompile(`created by .* in goroutine (\d+)`)
+	// A user test frame: <import/path>.TestXxx( or FuzzXxx(, including subtest and
+	// fuzz-seed closures like ".func1" / ".func1.2". Captures the import path and
+	// the enclosing Test/Fuzz name, so a parallel subtest goroutine (whose frame is
+	// "pkg.TestParent.func1(") is still attributed to TestParent.
+	testFrameRe = regexp.MustCompile(`^(\S+)\.((?:Test|Fuzz)\w+)(?:\.func\d+(?:\.\d+)*)?\(`)
+	// The "created by ... in goroutine N" trailer that names a goroutine's creator,
+	// anchored to the start of a line so a file path containing those words cannot
+	// masquerade as the trailer.
+	createdByRe = regexp.MustCompile(`(?m)^created by .* in goroutine (\d+)`)
+	// A method receiver, e.g. "(*HangSuite)" in "pkg.(*HangSuite).TestX", stripped
+	// so a testify suite method's import path is not polluted with the receiver.
+	receiverRe = regexp.MustCompile(`\.\(\*?[\w.]+\)$`)
 )
 
 // Goroutine is one parsed block of a runtime dump.
@@ -57,8 +66,9 @@ func Parse(text string) []Goroutine {
 			g.ID, _ = strconv.Atoi(m[1])
 			g.State = m[2]
 		}
-		if m := createdByRe.FindStringSubmatch(block); m != nil {
-			g.CreatedBy, _ = strconv.Atoi(m[1])
+		if ms := createdByRe.FindAllStringSubmatch(block, -1); ms != nil {
+			// The genuine trailer is the block's last "created by" line.
+			g.CreatedBy, _ = strconv.Atoi(ms[len(ms)-1][1])
 		}
 		out = append(out, g)
 		cur = nil
@@ -79,17 +89,22 @@ func Parse(text string) []Goroutine {
 // together with its own goroutine and every goroutine it transitively created.
 //
 // A goroutine is a test root when it runs under testing.tRunner and contains a
-// user TestXxx frame, but is not the harness's main goroutine (testing.runTests
-// / testing.(*M).Run) and not TestMain.
+// user TestXxx/FuzzXxx frame, but is not the harness's main goroutine
+// (testing.runTests / testing.(*M).Run) and not TestMain. A nested candidate — a
+// subtest or suite method whose parent test also matched — is dropped so each hang
+// is reported once, at its outermost test.
 func HungTests(gs []Goroutine) []Hang {
-	byID := make(map[int]Goroutine, len(gs))
 	childrenOf := make(map[int][]Goroutine, len(gs))
 	for _, g := range gs {
-		byID[g.ID] = g
 		childrenOf[g.CreatedBy] = append(childrenOf[g.CreatedBy], g)
 	}
 
-	var hangs []Hang
+	type candidate struct {
+		hang   Hang
+		rootID int
+		ids    map[int]bool // this candidate's own goroutine plus all it created
+	}
+	var cands []candidate
 	for _, g := range gs {
 		if !strings.Contains(g.Raw, "testing.tRunner(") {
 			continue
@@ -101,12 +116,32 @@ func HungTests(gs []Goroutine) []Hang {
 		if test == "" || test == "TestMain" {
 			continue
 		}
-		hangs = append(hangs, Hang{
-			Package: pkg,
-			Test:    test,
-			State:   g.State,
-			Stacks:  collect(g, childrenOf),
+		stacks := collect(g, childrenOf)
+		ids := make(map[int]bool, len(stacks))
+		for _, s := range stacks {
+			if s.ID != 0 {
+				ids[s.ID] = true
+			}
+		}
+		cands = append(cands, candidate{
+			hang:   Hang{Package: pkg, Test: test, State: g.State, Stacks: stacks},
+			rootID: g.ID,
+			ids:    ids,
 		})
+	}
+
+	var hangs []Hang
+	for i, c := range cands {
+		nested := false
+		for j, other := range cands {
+			if i != j && c.rootID != 0 && other.ids[c.rootID] {
+				nested = true // c's root is inside another candidate's subtree
+				break
+			}
+		}
+		if !nested {
+			hangs = append(hangs, c.hang)
+		}
 	}
 	return hangs
 }
@@ -132,11 +167,15 @@ func collect(root Goroutine, childrenOf map[int][]Goroutine) []Goroutine {
 	return out
 }
 
+// testFrame returns the outermost Test/Fuzz frame in the block — the last one
+// scanning top (innermost) to bottom (adjacent to testing.tRunner) — so a test
+// that calls a Test-prefixed helper is attributed to the test the runner invoked,
+// not to the helper. The receiver of a suite method is stripped from the package.
 func testFrame(block string) (pkg, test string) {
 	for _, ln := range strings.Split(block, "\n") {
 		if m := testFrameRe.FindStringSubmatch(strings.TrimSpace(ln)); m != nil {
-			return m[1], m[2]
+			pkg, test = receiverRe.ReplaceAllString(m[1], ""), m[2]
 		}
 	}
-	return "", ""
+	return pkg, test
 }

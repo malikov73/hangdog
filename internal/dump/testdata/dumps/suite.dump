@@ -1,0 +1,153 @@
+goroutine 0 gp=0x102bb3060 m=0 mp=0x102bb3aa0 [idle]:
+runtime.kevent(0x3, 0x0, 0x0, 0x16d9add30, 0x40, 0x16d9adcf8)
+	/usr/local/go/src/runtime/sys_darwin.go:439 +0x20 fp=0x16d9adca0 sp=0x16d9adc80 pc=0x1024bcba0
+runtime.netpoll(0x34630b86ddf)
+	/usr/local/go/src/runtime/netpoll_kqueue.go:110 +0x104 fp=0x16d9ae540 sp=0x16d9adca0 pc=0x102497454
+runtime.findRunnable()
+	/usr/local/go/src/runtime/proc.go:3754 +0x9c8 fp=0x16d9ae710 sp=0x16d9ae540 pc=0x1024a3878
+runtime.schedule()
+	/usr/local/go/src/runtime/proc.go:4164 +0x90 fp=0x16d9ae750 sp=0x16d9ae710 pc=0x1024a5220
+runtime.park_m(0x5eb922e5fa40)
+	/usr/local/go/src/runtime/proc.go:4304 +0x244 fp=0x16d9ae7b0 sp=0x16d9ae750 pc=0x1024a56a4
+runtime.mcall()
+	/usr/local/go/src/runtime/asm_arm64.s:339 +0x54 fp=0x16d9ae7c0 sp=0x16d9ae7b0 pc=0x1024d7f44
+
+goroutine 1 gp=0x5eb922e5e1e0 m=nil [chan receive]:
+runtime.gopark(0x1024dab30?, 0x5eb922e8d998?, 0x34?, 0x29?, 0x104d902e0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922e8d950 sp=0x5eb922e8d930 pc=0x1024d295c
+runtime.chanrecv(0x5eb922eda300, 0x5eb922e8da57, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x470 fp=0x5eb922e8d9d0 sp=0x5eb922e8d950 pc=0x102466070
+runtime.chanrecv1(0x102bb24c0?, 0x102b4ab60?)
+	/usr/local/go/src/runtime/chan.go:509 +0x14 fp=0x5eb922e8da00 sp=0x5eb922e8d9d0 pc=0x102465bc4
+testing.(*T).Run(0x5eb922f9a6c8, {0x1027948e4?, 0x5eb922e8db18?}, 0x102b3c768)
+	/usr/local/go/src/testing/testing.go:2109 +0x3bc fp=0x5eb922e8dae0 sp=0x5eb922e8da00 pc=0x1025796bc
+testing.runTests.func1(0x5eb922f9a6c8)
+	/usr/local/go/src/testing/testing.go:2585 +0x38 fp=0x5eb922e8db20 sp=0x5eb922e8dae0 pc=0x10257b528
+testing.tRunner(0x5eb922f9a6c8, 0x5eb922e8dc48)
+	/usr/local/go/src/testing/testing.go:2036 +0xc4 fp=0x5eb922e8db70 sp=0x5eb922e8db20 pc=0x102578914
+testing.runTests({0x102791c00, 0x5}, {0x102791c00, 0x5}, 0x5eb922e6a2e8, {0x102b9c730, 0x1, 0x1}, {0x808080802c495e19?, 0x102795636?, ...})
+	/usr/local/go/src/testing/testing.go:2583 +0x3f0 fp=0x5eb922e8dc70 sp=0x5eb922e8db70 pc=0x10257b420
+testing.(*M).Run(0x5eb922ef0dc0)
+	/usr/local/go/src/testing/testing.go:2443 +0x578 fp=0x5eb922e8deb0 sp=0x5eb922e8dc70 pc=0x10257a298
+main.main()
+	_testmain.go:46 +0x80 fp=0x5eb922e8df30 sp=0x5eb922e8deb0 pc=0x10274ffd0
+runtime.main()
+	/usr/local/go/src/runtime/proc.go:290 +0x2b4 fp=0x5eb922e8dfd0 sp=0x5eb922e8df30 pc=0x10249d3a4
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922e8dfd0 sp=0x5eb922e8dfd0 pc=0x1024d9ff4
+
+goroutine 2 gp=0x5eb922e5e780 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922ec2f90 sp=0x5eb922ec2f70 pc=0x1024d295c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.forcegchelper()
+	/usr/local/go/src/runtime/proc.go:375 +0xb4 fp=0x5eb922ec2fd0 sp=0x5eb922ec2f90 pc=0x10249d6c4
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922ec2fd0 sp=0x5eb922ec2fd0 pc=0x1024d9ff4
+created by runtime.init.7 in goroutine 1
+	/usr/local/go/src/runtime/proc.go:363 +0x24
+
+goroutine 3 gp=0x5eb922e5ed20 m=nil [GC sweep wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922ec3770 sp=0x5eb922ec3750 pc=0x1024d295c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.bgsweep(0x5eb922eda000)
+	/usr/local/go/src/runtime/mgcsweep.go:279 +0x9c fp=0x5eb922ec37b0 sp=0x5eb922ec3770 pc=0x1024860bc
+runtime.gcenable.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:214 +0x20 fp=0x5eb922ec37d0 sp=0x5eb922ec37b0 pc=0x1024775e0
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922ec37d0 sp=0x5eb922ec37d0 pc=0x1024d9ff4
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:214 +0x6c
+
+goroutine 4 gp=0x5eb922e5ef00 m=nil [GC scavenge wait]:
+runtime.gopark(0x5eb922eda000?, 0x1027b2fa8?, 0x1?, 0x0?, 0x5eb922e5ef00?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922ec3f60 sp=0x5eb922ec3f40 pc=0x1024d295c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x102bb2c80)
+	/usr/local/go/src/runtime/mgcscavenge.go:425 +0x5c fp=0x5eb922ec3f90 sp=0x5eb922ec3f60 pc=0x102483cac
+runtime.bgscavenge(0x5eb922eda000)
+	/usr/local/go/src/runtime/mgcscavenge.go:653 +0x44 fp=0x5eb922ec3fb0 sp=0x5eb922ec3f90 pc=0x1024841e4
+runtime.gcenable.gowrap2()
+	/usr/local/go/src/runtime/mgc.go:215 +0x20 fp=0x5eb922ec3fd0 sp=0x5eb922ec3fb0 pc=0x1024775a0
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922ec3fd0 sp=0x5eb922ec3fd0 pc=0x1024d9ff4
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:215 +0xac
+
+goroutine 5 gp=0x5eb922e5f4a0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x0?, 0xb8?, 0x25?, 0x1024d3654?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922ec2580 sp=0x5eb922ec2560 pc=0x1024d295c
+runtime.runFinalizers()
+	/usr/local/go/src/runtime/mfinal.go:210 +0x100 fp=0x5eb922ec27d0 sp=0x5eb922ec2580 pc=0x102476600
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922ec27d0 sp=0x5eb922ec27d0 pc=0x1024d9ff4
+created by runtime.createfing in goroutine 1
+	/usr/local/go/src/runtime/mfinal.go:172 +0x78
+
+goroutine 6 gp=0x5eb922e5f680 m=nil [cleanup wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922ec4750 sp=0x5eb922ec4730 pc=0x1024d295c
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x102bb2ea0)
+	/usr/local/go/src/runtime/mcleanup.go:522 +0x160 fp=0x5eb922ec4790 sp=0x5eb922ec4750 pc=0x1024736b0
+runtime.runCleanups()
+	/usr/local/go/src/runtime/mcleanup.go:718 +0x40 fp=0x5eb922ec47d0 sp=0x5eb922ec4790 pc=0x102473e00
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922ec47d0 sp=0x5eb922ec47d0 pc=0x1024d9ff4
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+	/usr/local/go/src/runtime/mcleanup.go:672 +0x108
+
+goroutine 7 gp=0x5eb922e5f860 m=nil [chan receive]:
+runtime.gopark(0x1024dab30?, 0x5eb922fabb78?, 0x6c?, 0x71?, 0x104d902e0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922fabb30 sp=0x5eb922fabb10 pc=0x1024d295c
+runtime.chanrecv(0x5eb922edb400, 0x5eb922fabc37, 0x1)
+	/usr/local/go/src/runtime/chan.go:667 +0x470 fp=0x5eb922fabbb0 sp=0x5eb922fabb30 pc=0x102466070
+runtime.chanrecv1(0x102bb24c0?, 0x102b4ab60?)
+	/usr/local/go/src/runtime/chan.go:509 +0x14 fp=0x5eb922fabbe0 sp=0x5eb922fabbb0 pc=0x102465bc4
+testing.(*T).Run(0x5eb922f9a908, {0x102a9424f?, 0x102ad8600?}, 0x5eb922fc42d0)
+	/usr/local/go/src/testing/testing.go:2109 +0x3bc fp=0x5eb922fabcc0 sp=0x5eb922fabbe0 pc=0x1025796bc
+github.com/stretchr/testify/suite.runTests(0x5eb922f9a908, {0x5eb922fabe40?, 0x5eb922e6ecc0?, 0x102b502e0?})
+	/go/pkg/mod/github.com/stretchr/testify@v1.11.1/suite/suite.go:235 +0x70 fp=0x5eb922fabd10 sp=0x5eb922fabcc0 pc=0x10273ef10
+github.com/stretchr/testify/suite.Run(0x5eb922f9a908, {0x102b42ea0, 0x5eb922e6ecc0})
+	/go/pkg/mod/github.com/stretchr/testify@v1.11.1/suite/suite.go:225 +0x6f8 fp=0x5eb922fabf30 sp=0x5eb922fabd10 pc=0x10273e3e8
+stlab.TestHangSuite(0x5eb922f9a908)
+	/repo/suite_test.go:14 +0x3c fp=0x5eb922fabf60 sp=0x5eb922fabf30 pc=0x10274777c
+testing.tRunner(0x5eb922f9a908, 0x102b3c768)
+	/usr/local/go/src/testing/testing.go:2036 +0xc4 fp=0x5eb922fabfb0 sp=0x5eb922fabf60 pc=0x102578914
+testing.(*T).Run.gowrap1()
+	/usr/local/go/src/testing/testing.go:2101 +0x20 fp=0x5eb922fabfd0 sp=0x5eb922fabfb0 pc=0x1025797e0
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922fabfd0 sp=0x5eb922fabfd0 pc=0x1024d9ff4
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2101 +0x3a8
+
+goroutine 8 gp=0x5eb922e5fa40 m=nil [sleep]:
+runtime.gopark(0xc790fbdcf7a7?, 0x1?, 0x70?, 0xcc?, 0x1?)
+	/usr/local/go/src/runtime/proc.go:462 +0xbc fp=0x5eb922fad690 sp=0x5eb922fad670 pc=0x1024d295c
+time.Sleep(0x34630b8a000)
+	/usr/local/go/src/runtime/time.go:363 +0x150 fp=0x5eb922fad6f0 sp=0x5eb922fad690 pc=0x1024d6890
+stlab.(*HangSuite).TestStuckMethod(0x0?)
+	/repo/suite_test.go:12 +0x28 fp=0x5eb922fad710 sp=0x5eb922fad6f0 pc=0x102747728
+runtime.call16(0x5eb922fcf200, 0x5eb922e5c9b0, 0x0, 0x0, 0x0, 0x8, 0x5eb922fad968)
+	/usr/local/go/src/runtime/asm_arm64.s:669 +0x70 fp=0x5eb922fad730 sp=0x5eb922fad710 pc=0x1024d84b0
+runtime.reflectcall(0x102b3b2c0?, 0x5eb922e6ecc0?, 0x1?, 0x2797079?, 0x1?, 0x12?, 0x102b3b2c0?)
+	<autogenerated>:1 +0x24 fp=0x5eb922fad770 sp=0x5eb922fad730 pc=0x1024dbde4
+reflect.Value.call({0x5eb922fd4040?, 0x5eb922e5c9b0?, 0x5eb922e6ecc8?}, {0x102791ad4, 0x4}, {0x5eb922eecf20, 0x1, 0x10273eae8?})
+	/usr/local/go/src/reflect/value.go:586 +0xabc fp=0x5eb922fadd40 sp=0x5eb922fad770 pc=0x10253a48c
+reflect.Value.Call({0x5eb922fd4040?, 0x5eb922e5c9b0?, 0x1027dfc80?}, {0x5eb922eecf20?, 0x0?, 0x0?})
+	/usr/local/go/src/reflect/value.go:369 +0x94 fp=0x5eb922faddc0 sp=0x5eb922fadd40 pc=0x102539804
+github.com/stretchr/testify/suite.Run.func1(0x5eb922f9afc8)
+	/go/pkg/mod/github.com/stretchr/testify@v1.11.1/suite/suite.go:196 +0x358 fp=0x5eb922fadf60 sp=0x5eb922faddc0 pc=0x10273ea58
+testing.tRunner(0x5eb922f9afc8, 0x5eb922fc42d0)
+	/usr/local/go/src/testing/testing.go:2036 +0xc4 fp=0x5eb922fadfb0 sp=0x5eb922fadf60 pc=0x102578914
+testing.(*T).Run.gowrap1()
+	/usr/local/go/src/testing/testing.go:2101 +0x20 fp=0x5eb922fadfd0 sp=0x5eb922fadfb0 pc=0x1025797e0
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_arm64.s:1447 +0x4 fp=0x5eb922fadfd0 sp=0x5eb922fadfd0 pc=0x1024d9ff4
+created by testing.(*T).Run in goroutine 7
+	/usr/local/go/src/testing/testing.go:2101 +0x3a8

@@ -1,6 +1,9 @@
 package dump
 
 import (
+	"maps"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 )
@@ -103,6 +106,37 @@ created by testing.(*T).Run in goroutine 1
 	hangs := HungTests(gs)
 	if len(hangs) != 1 || hangs[0].Test != "TestHang" {
 		t.Fatalf("modern header attribution failed: %+v", hangs)
+	}
+}
+
+// Golden dumps captured live from Go 1.26.2 for the hang shapes that stock stack
+// parsing gets wrong. Each asserts the multiset of attributed "<pkg>.<Test>" names.
+func TestHungTestsScenarios(t *testing.T) {
+	tests := []struct {
+		file string
+		want map[string]int
+	}{
+		{"par.dump", map[string]int{"blab.TestParallelSub": 1}},  // t.Parallel subtest
+		{"table.dump", map[string]int{"blab.TestTablePar": 2}},   // table-driven t.Parallel, both cases hung
+		{"seq.dump", map[string]int{"blab.TestSeqSub": 1}},       // sequential subtest, deduped to the parent
+		{"helper.dump", map[string]int{"blab.TestOuter": 1}},     // Test calling a Test-prefixed helper
+		{"fuzz.dump", map[string]int{"blab.FuzzHang": 1}},        // fuzz seed-corpus hang under a plain run
+		{"suite.dump", map[string]int{"stlab.TestHangSuite": 1}}, // testify suite method, deduped, receiver stripped
+	}
+	for _, tt := range tests {
+		t.Run(tt.file, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join("testdata", "dumps", tt.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := map[string]int{}
+			for _, h := range HungTests(Parse(string(data))) {
+				got[h.Name()]++
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("HungTests(%s) = %v, want %v", tt.file, got, tt.want)
+			}
+		})
 	}
 }
 
