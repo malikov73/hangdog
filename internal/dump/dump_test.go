@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -106,6 +107,42 @@ created by testing.(*T).Run in goroutine 1
 	hangs := HungTests(gs)
 	if len(hangs) != 1 || hangs[0].Test != "TestHang" {
 		t.Fatalf("modern header attribution failed: %+v", hangs)
+	}
+}
+
+// After the last goroutine, the runtime prints a register dump and go test then
+// resumes its test2json summary. None of it may fold into a goroutine's stack.
+func TestParseDropsRegisterDump(t *testing.T) {
+	const dump = `goroutine 6 [sleep]:
+time.Sleep(0x1)
+	/usr/local/go/src/runtime/time.go:363 +0x150
+pkg.TestX(0x0)
+	/repo/x_test.go:8 +0x28
+testing.tRunner(0x0, 0x0)
+	/usr/local/go/src/testing/testing.go:2036 +0xc4
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2101 +0x3a8
+
+r0      0x4
+lr      0x1049491c8
+sp      0x16b535a90
+pc      0x188dc7fc4
+fault   0x188dc7fc4
+FAIL	pkg	2.755s
+=== RUN   TestNext
+`
+	gs := Parse(dump)
+	if len(gs) != 1 {
+		t.Fatalf("got %d goroutines, want 1 (register/summary lines must not form blocks): %+v", len(gs), gs)
+	}
+	for _, noise := range []string{"r0", "fault", "FAIL", "=== RUN"} {
+		if strings.Contains(gs[0].Raw, noise) {
+			t.Errorf("goroutine block absorbed trailing %q:\n%s", noise, gs[0].Raw)
+		}
+	}
+	hangs := HungTests(gs)
+	if len(hangs) != 1 || hangs[0].Test != "TestX" {
+		t.Fatalf("attribution after register dump failed: %+v", hangs)
 	}
 }
 

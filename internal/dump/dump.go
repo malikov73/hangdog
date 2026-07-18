@@ -52,7 +52,9 @@ type Hang struct {
 // Name returns the "<package>.<Test>" identifier of the hang.
 func (h Hang) Name() string { return h.Package + "." + h.Test }
 
-// Parse splits a raw dump into goroutine blocks.
+// Parse splits a raw dump into goroutine blocks. A goroutine block ends at the
+// next header or at a blank line, so the register dump and the test2json summary
+// lines the runtime prints after the last goroutine are not folded into it.
 func Parse(text string) []Goroutine {
 	var out []Goroutine
 	var cur []string
@@ -74,6 +76,10 @@ func Parse(text string) []Goroutine {
 		cur = nil
 	}
 	for _, ln := range strings.Split(text, "\n") {
+		if strings.TrimSpace(ln) == "" {
+			flush() // blank line separates goroutine blocks from each other and from the register dump
+			continue
+		}
 		if headerRe.MatchString(ln) {
 			flush()
 		}

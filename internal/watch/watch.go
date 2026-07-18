@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -61,10 +63,11 @@ func Run(cfg Config, cmd []string) (int, error) {
 	pid := c.Process.Pid
 
 	st := &state{
-		cfg:     cfg,
-		start:   time.Now(),
-		last:    time.Now(),
-		running: map[string]int{},
+		cfg:       cfg,
+		start:     time.Now(),
+		last:      time.Now(),
+		running:   map[string]int{},
+		dumpByPkg: map[string][]string{},
 	}
 
 	done := make(chan struct{})
@@ -132,7 +135,7 @@ type state struct {
 	triggered bool
 	trigger   string // human description of what fired
 	capturing bool
-	dumpLines []string
+	dumpByPkg map[string][]string // package import path -> its captured dump lines
 }
 
 func (s *state) handle(raw []byte, e testjson.Event) {
@@ -151,8 +154,10 @@ func (s *state) handle(raw []byte, e testjson.Event) {
 		}
 	case "output":
 		if s.capturing {
-			// Buffer the runtime dump for the focused report.
-			s.dumpLines = append(s.dumpLines, e.Output)
+			// Bucket the runtime dump by package: goroutine IDs are per-process,
+			// so a later per-package Parse keeps created-by chains from crossing
+			// process boundaries in a multi-package run.
+			s.dumpByPkg[e.Package] = append(s.dumpByPkg[e.Package], e.Output)
 		}
 	}
 
@@ -313,7 +318,7 @@ func pkgDir(importPath string) string {
 
 func (s *state) report() {
 	s.mu.Lock()
-	text := strings.Join(s.dumpLines, "")
+	dumpByPkg := s.dumpByPkg
 	triggered := s.triggered
 	trigger := s.trigger
 	s.mu.Unlock()
@@ -333,11 +338,23 @@ func (s *state) report() {
 		}
 	}
 
-	hangs := dump.HungTests(dump.Parse(text))
+	// Parse each package's dump on its own — goroutine IDs are per-process, so
+	// merging dumps would cross-link created-by chains. Sorted for stable output.
+	var hangs []dump.Hang
+	anyDump := false
+	for _, pkg := range slices.Sorted(maps.Keys(dumpByPkg)) {
+		text := strings.Join(dumpByPkg[pkg], "")
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		anyDump = true
+		hangs = append(hangs, dump.HungTests(dump.Parse(text))...)
+	}
+
 	fmt.Fprintf(w, "\n========================= HANGDOG =========================\n")
 	if len(hangs) == 0 {
 		fmt.Fprintf(w, "A hang fired (%s) but no test could be attributed from the dump.\n", trigger)
-		if text == "" {
+		if !anyDump {
 			fmt.Fprintln(w, "No goroutine dump was captured (is this `go test`? is SIGQUIT reaching the binary?).")
 		}
 		fmt.Fprintf(w, "===========================================================\n")
