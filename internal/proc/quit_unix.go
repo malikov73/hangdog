@@ -9,3 +9,9 @@ import "syscall"
 func Quit(pid int) error {
 	return syscall.Kill(pid, syscall.SIGQUIT)
 }
+
+// Kill force-terminates pid with SIGKILL, used to escalate when SIGQUIT is
+// ignored so that hangdog itself never blocks waiting on a wedged binary.
+func Kill(pid int) error {
+	return syscall.Kill(pid, syscall.SIGKILL)
+}

@@ -32,10 +32,10 @@ func TestBinaries(parent int) ([]TestBinary, error) {
 				continue
 			}
 			seen[c.pid] = true
-			if strings.HasSuffix(c.comm, ".test") {
+			if strings.HasSuffix(c.exe, ".test") {
 				out = append(out, TestBinary{
 					PID:  c.pid,
-					Name: filepath.Base(c.comm),
+					Name: filepath.Base(c.exe),
 					Cwd:  cwd(c.pid),
 				})
 			}
@@ -47,12 +47,16 @@ func TestBinaries(parent int) ([]TestBinary, error) {
 
 type procRow struct {
 	pid, ppid int
-	comm      string
+	exe       string // argv[0]: the executable path
 }
 
 // processTree maps a parent PID to its direct children via `ps`.
+//
+// It reads argv (args=), not comm=: Linux truncates comm to 15 characters, so a
+// binary like "hangfixture.test" (16 chars) would lose its ".test" suffix. The
+// first token of args is the full executable path on both Linux and macOS.
 func processTree() (map[int][]procRow, error) {
-	out, err := exec.Command("ps", "-eo", "pid=,ppid=,comm=").Output()
+	out, err := exec.Command("ps", "-eo", "pid=,ppid=,args=").Output()
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +71,7 @@ func processTree() (map[int][]procRow, error) {
 		if err1 != nil || err2 != nil {
 			continue
 		}
-		comm := strings.Join(f[2:], " ")
-		tree[ppid] = append(tree[ppid], procRow{pid: pid, ppid: ppid, comm: comm})
+		tree[ppid] = append(tree[ppid], procRow{pid: pid, ppid: ppid, exe: f[2]})
 	}
 	return tree, nil
 }

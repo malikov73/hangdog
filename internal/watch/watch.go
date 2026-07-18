@@ -165,7 +165,29 @@ func (s *state) watchdog(pid int, done <-chan struct{}) {
 			s.mu.Unlock()
 
 			fmt.Fprintf(s.cfg.Stderr, "\n[hangdog] %s exceeded; stuck package(s): %s\n", reason, strings.Join(stuck, " "))
-			s.signal(pid, stuck)
+			targets := s.signal(pid, stuck)
+			go s.escalate(targets, done)
+		}
+	}
+}
+
+// graceKill is how long hangdog waits after SIGQUIT before force-killing a test
+// binary that ignored it — so the watchdog itself can never hang.
+const graceKill = 15 * time.Second
+
+func (s *state) escalate(pids []int, done <-chan struct{}) {
+	if len(pids) == 0 {
+		return
+	}
+	select {
+	case <-done:
+		// The run ended (the dump was flushed); nothing to escalate.
+	case <-time.After(graceKill):
+		for _, pid := range pids {
+			fmt.Fprintf(s.cfg.Stderr, "[hangdog] SIGQUIT ignored after %s; SIGKILL -> pid %d\n", graceKill, pid)
+			if err := proc.Kill(pid); err != nil {
+				fmt.Fprintf(s.cfg.Stderr, "[hangdog] kill pid %d: %v\n", pid, err)
+			}
 		}
 	}
 }
@@ -191,27 +213,32 @@ func (s *state) stuckPackages() []string {
 
 // signal delivers SIGQUIT to the child test binaries of the stuck packages,
 // falling back to every discovered .test child if the package cannot be mapped.
-func (s *state) signal(pid int, stuck []string) {
+// It returns the PIDs it signalled so the caller can escalate to SIGKILL.
+func (s *state) signal(pid int, stuck []string) []int {
 	bins, err := proc.TestBinaries(pid)
 	if err != nil {
 		fmt.Fprintf(s.cfg.Stderr, "[hangdog] cannot locate test binaries: %v\n", err)
-		return
+		return nil
 	}
 	if len(bins) == 0 {
 		fmt.Fprintln(s.cfg.Stderr, "[hangdog] no child .test binary found to signal")
-		return
+		return nil
 	}
 
 	targets := matchTargets(bins, stuck)
 	if len(targets) == 0 {
 		targets = bins // fall back to all
 	}
+	pids := make([]int, 0, len(targets))
 	for _, b := range targets {
 		fmt.Fprintf(s.cfg.Stderr, "[hangdog] SIGQUIT -> %s (pid %d)\n", b.Name, b.PID)
 		if err := proc.Quit(b.PID); err != nil {
 			fmt.Fprintf(s.cfg.Stderr, "[hangdog] signal pid %d: %v\n", b.PID, err)
+			continue
 		}
+		pids = append(pids, b.PID)
 	}
+	return pids
 }
 
 // matchTargets selects the test binaries whose working directory matches the
