@@ -1,0 +1,24 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+  settings:
+    errcheck:
+      # Writes to stderr/stdout are diagnostics; a failed write there is not
+      # actionable and checking every one only adds noise.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - io.WriteString
+        - (io.Writer).Write
+        - (*os.File).Close

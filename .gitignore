@@ -1,0 +1,4 @@
+/hangdog
+/dist/
+*.test
+*.out
