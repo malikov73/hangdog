@@ -52,11 +52,16 @@ type procRow struct {
 
 // processTree maps a parent PID to its direct children via `ps`.
 //
+// It uses the BSD-syntax `axo` selector, not `-eo`: on macOS and the BSDs `-e`
+// means "show the environment" and process selection falls back to the current
+// terminal's processes, so descendants in a tty-less CI session are missed; `axo`
+// selects all processes on Linux (procps), macOS and BSD alike.
+//
 // It reads argv (args=), not comm=: Linux truncates comm to 15 characters, so a
 // binary like "hangfixture.test" (16 chars) would lose its ".test" suffix. The
 // first token of args is the full executable path on both Linux and macOS.
 func processTree() (map[int][]procRow, error) {
-	out, err := exec.Command("ps", "-eo", "pid=,ppid=,args=").Output()
+	out, err := exec.Command("ps", "axo", "pid=,ppid=,args=").Output()
 	if err != nil {
 		return nil, err
 	}
