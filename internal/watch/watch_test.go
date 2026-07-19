@@ -2,6 +2,8 @@ package watch
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -49,6 +51,26 @@ func TestInjectFlags(t *testing.T) {
 			in:   []string{"echo", "hello"},
 			want: []string{"echo", "hello"},
 		},
+		{
+			name: "make test is not go test",
+			in:   []string{"make", "test"},
+			want: []string{"make", "test"},
+		},
+		{
+			name: "richgo test is not go test",
+			in:   []string{"richgo", "test", "./..."},
+			want: []string{"richgo", "test", "./..."},
+		},
+		{
+			name: "flags after -args belong to the test binary",
+			in:   []string{"go", "test", "./...", "-args", "-timeout=5s"},
+			want: []string{"go", "test", "-json", "-timeout", "0", "./...", "-args", "-timeout=5s"},
+		},
+		{
+			name: "--timeout-scale does not suppress -timeout injection",
+			in:   []string{"go", "test", "--timeout-scale=2", "./..."},
+			want: []string{"go", "test", "-json", "-timeout", "0", "--timeout-scale=2", "./..."},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -57,6 +79,49 @@ func TestInjectFlags(t *testing.T) {
 				t.Errorf("InjectFlags(%v)\n got = %v\nwant = %v", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+// In passthrough mode hangdog must write nothing to stderr (gotestsum treats any
+// stderr from the wrapped command as an error); its progress lines are folded into
+// the hang report instead.
+func TestPassthroughDiagsRoutedToReportFile(t *testing.T) {
+	reportPath := filepath.Join(t.TempDir(), "hang.txt")
+	var stderr, stdout bytes.Buffer
+	st := &state{cfg: Config{
+		Passthrough: true,
+		HangReport:  reportPath,
+		Stderr:      &stderr,
+		Stdout:      &stdout,
+	}}
+	st.diagf("[hangdog] SIGQUIT -> foo.test (pid 1)\n")
+	if stderr.Len() != 0 {
+		t.Fatalf("passthrough diag leaked to stderr: %q", stderr.String())
+	}
+
+	st.triggered = true
+	st.trigger = "idle 2s"
+	st.dumpByPkg = map[string][]string{}
+	st.report()
+	if stderr.Len() != 0 {
+		t.Errorf("report leaked to stderr in passthrough mode: %q", stderr.String())
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "SIGQUIT -> foo.test") {
+		t.Errorf("buffered diag not folded into the report:\n%s", data)
+	}
+}
+
+// A stream line that is not test2json must be forwarded, not dropped.
+func TestHandleRawForwardsNonJSON(t *testing.T) {
+	var stdout bytes.Buffer
+	st := &state{cfg: Config{Stdout: &stdout}}
+	st.handleRaw([]byte("plain build output"))
+	if got := stdout.String(); got != "plain build output\n" {
+		t.Errorf("handleRaw wrote %q, want %q", got, "plain build output\n")
 	}
 }
 

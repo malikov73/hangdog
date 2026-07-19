@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -81,9 +82,16 @@ func Run(cfg Config, cmd []string) (int, error) {
 		line := sc.Bytes()
 		var e testjson.Event
 		if err := json.Unmarshal(line, &e); err != nil {
+			st.handleRaw(line) // not test2json (build output, wrapped command): forward verbatim
 			continue
 		}
 		st.handle(line, e)
+	}
+	if err := sc.Err(); err != nil {
+		// A read error (or a line past the 16MB cap) would otherwise leave the
+		// watchdog disarmed and Wait blocked on a still-running child forever.
+		fmt.Fprintf(cfg.Stderr, "[hangdog] reading test stream: %v; terminating the run\n", err)
+		_ = proc.KillGroup(pid)
 	}
 	close(done)
 	waitErr := c.Wait()
@@ -116,9 +124,9 @@ func (s *state) handleSignals(pgid int, done <-chan struct{}) (stop func()) {
 		select {
 		case <-done:
 		case sig := <-ch:
-			fmt.Fprintf(s.cfg.Stderr, "\n[hangdog] received %s; terminating the test run\n", sig)
+			s.diagf("\n[hangdog] received %s; terminating the test run\n", sig)
 			if err := proc.KillGroup(pgid); err != nil {
-				fmt.Fprintf(s.cfg.Stderr, "[hangdog] kill process group %d: %v\n", pgid, err)
+				s.diagf("[hangdog] kill process group %d: %v\n", pgid, err)
 			}
 		}
 	}()
@@ -136,11 +144,25 @@ type state struct {
 	trigger   string // human description of what fired
 	capturing bool
 	dumpByPkg map[string][]string // package import path -> its captured dump lines
+	diags     []string            // [hangdog] progress lines buffered in passthrough mode
+}
+
+// diagf emits a "[hangdog] ..." progress line. In passthrough mode it is buffered
+// into the hang report instead of stderr, because gotestsum treats any stderr from
+// the wrapped command as an error; otherwise it goes straight to stderr.
+func (s *state) diagf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cfg.Passthrough {
+		s.diags = append(s.diags, msg)
+		return
+	}
+	io.WriteString(s.cfg.Stderr, msg)
 }
 
 func (s *state) handle(raw []byte, e testjson.Event) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.last = time.Now()
 
 	switch e.Action {
@@ -160,7 +182,12 @@ func (s *state) handle(raw []byte, e testjson.Event) {
 			s.dumpByPkg[e.Package] = append(s.dumpByPkg[e.Package], e.Output)
 		}
 	}
+	capturing := s.capturing
+	s.mu.Unlock()
 
+	// Writes stay outside the lock: handle runs only on the single scan goroutine,
+	// so a stalled stdout consumer (a paused pipe, a wedged gotestsum) must not be
+	// able to freeze the watchdog by blocking a write while the mutex is held.
 	if s.cfg.Passthrough {
 		// gotestsum et al. consume the complete raw stream, dump included.
 		s.cfg.Stdout.Write(raw)
@@ -169,9 +196,19 @@ func (s *state) handle(raw []byte, e testjson.Event) {
 	}
 	// Human mode: reconstruct normal `go test` text, but suppress the giant
 	// post-trigger dump — the focused report replaces it.
-	if e.Action == "output" && !s.capturing {
+	if e.Action == "output" && !capturing {
 		io.WriteString(s.cfg.Stdout, e.Output)
 	}
+}
+
+// handleRaw forwards a stream line that is not test2json (older toolchain build
+// output, a wrapped non-go-test command, a stray print) instead of dropping it.
+func (s *state) handleRaw(line []byte) {
+	s.mu.Lock()
+	s.last = time.Now() // still stream activity: keep the idle trigger honest
+	s.mu.Unlock()
+	s.cfg.Stdout.Write(line)
+	s.cfg.Stdout.Write([]byte("\n"))
 }
 
 func (s *state) watchdog(pid int, done <-chan struct{}) {
@@ -198,7 +235,7 @@ func (s *state) watchdog(pid int, done <-chan struct{}) {
 			stuck := s.stuckPackages()
 			s.mu.Unlock()
 
-			fmt.Fprintf(s.cfg.Stderr, "\n[hangdog] %s exceeded; stuck package(s): %s\n", reason, strings.Join(stuck, " "))
+			s.diagf("\n[hangdog] %s exceeded; stuck package(s): %s\n", reason, strings.Join(stuck, " "))
 			s.signal(pid, stuck)
 			go s.escalate(pid, done)
 		}
@@ -233,9 +270,9 @@ func (s *state) escalate(pgid int, done <-chan struct{}) {
 	case <-done:
 		// The run ended (the dump was flushed); nothing to escalate.
 	case <-time.After(graceKill):
-		fmt.Fprintf(s.cfg.Stderr, "[hangdog] run did not end %s after trigger; SIGKILL -> process group %d\n", graceKill, pgid)
+		s.diagf("[hangdog] run did not end %s after trigger; SIGKILL -> process group %d\n", graceKill, pgid)
 		if err := proc.KillGroup(pgid); err != nil {
-			fmt.Fprintf(s.cfg.Stderr, "[hangdog] kill process group %d: %v\n", pgid, err)
+			s.diagf("[hangdog] kill process group %d: %v\n", pgid, err)
 		}
 	}
 }
@@ -267,11 +304,11 @@ func (s *state) stuckPackages() []string {
 func (s *state) signal(pid int, stuck []string) {
 	bins, err := proc.TestBinaries(pid)
 	if err != nil {
-		fmt.Fprintf(s.cfg.Stderr, "[hangdog] cannot locate test binaries: %v; will force-kill the run\n", err)
+		s.diagf("[hangdog] cannot locate test binaries: %v; will force-kill the run\n", err)
 		return
 	}
 	if len(bins) == 0 {
-		fmt.Fprintln(s.cfg.Stderr, "[hangdog] no child .test binary found to signal; will force-kill the run")
+		s.diagf("[hangdog] no child .test binary found to signal; will force-kill the run\n")
 		return
 	}
 
@@ -280,9 +317,9 @@ func (s *state) signal(pid int, stuck []string) {
 		targets = bins // fall back to all
 	}
 	for _, b := range targets {
-		fmt.Fprintf(s.cfg.Stderr, "[hangdog] SIGQUIT -> %s (pid %d)\n", b.Name, b.PID)
+		s.diagf("[hangdog] SIGQUIT -> %s (pid %d)\n", b.Name, b.PID)
 		if err := proc.Quit(b.PID); err != nil {
-			fmt.Fprintf(s.cfg.Stderr, "[hangdog] signal pid %d: %v\n", b.PID, err)
+			s.diagf("[hangdog] signal pid %d: %v\n", b.PID, err)
 		}
 	}
 }
@@ -321,6 +358,7 @@ func (s *state) report() {
 	dumpByPkg := s.dumpByPkg
 	triggered := s.triggered
 	trigger := s.trigger
+	diags := s.diags
 	s.mu.Unlock()
 
 	if !triggered {
@@ -336,6 +374,12 @@ func (s *state) report() {
 		} else {
 			fmt.Fprintf(s.cfg.Stderr, "[hangdog] cannot write %s: %v\n", s.cfg.HangReport, err)
 		}
+	}
+
+	// In passthrough mode the progress lines were withheld from stderr to honor
+	// gotestsum's contract; fold them into the report here.
+	for _, d := range diags {
+		io.WriteString(w, d)
 	}
 
 	// Parse each package's dump on its own — goroutine IDs are per-process, so
@@ -371,23 +415,26 @@ func (s *state) report() {
 
 // InjectFlags ensures the wrapped `go test` command emits test2json and lets
 // hangdog own the timeout: it adds -json (if absent) and -timeout 0 (unless the
-// user already set a -timeout), right after the `test` subcommand.
+// user already set a -timeout), right after the `test` subcommand. Commands that
+// are not a recognizable `go test` (e.g. `make test`, a wrapper script) are run
+// verbatim, and flags after `-args` are left to the test binary.
 func InjectFlags(cmd []string) []string {
-	testIdx := -1
+	if !isGoTest(cmd) {
+		return cmd
+	}
+
 	hasJSON := false
 	hasTimeout := false
-	for i, a := range cmd {
+	for _, a := range cmd[2:] {
+		if a == "-args" || a == "--args" {
+			break // everything after -args belongs to the test binary
+		}
 		switch {
-		case a == "test" && testIdx == -1:
-			testIdx = i
-		case a == "-json" || a == "--json" || strings.HasPrefix(a, "-json="):
+		case a == "-json" || a == "--json" || strings.HasPrefix(a, "-json=") || strings.HasPrefix(a, "--json="):
 			hasJSON = true
-		case a == "-timeout" || strings.HasPrefix(a, "-timeout=") || strings.HasPrefix(a, "--timeout"):
+		case a == "-timeout" || a == "--timeout" || strings.HasPrefix(a, "-timeout=") || strings.HasPrefix(a, "--timeout="):
 			hasTimeout = true
 		}
-	}
-	if testIdx == -1 {
-		return cmd // not a recognizable `go test`; run as given
 	}
 
 	var inject []string
@@ -402,8 +449,22 @@ func InjectFlags(cmd []string) []string {
 	}
 
 	out := make([]string, 0, len(cmd)+len(inject))
-	out = append(out, cmd[:testIdx+1]...)
+	out = append(out, cmd[:2]...) // "go", "test"
 	out = append(out, inject...)
-	out = append(out, cmd[testIdx+1:]...)
+	out = append(out, cmd[2:]...)
 	return out
+}
+
+// isGoTest reports whether cmd invokes the go toolchain's test subcommand, so
+// hangdog only rewrites real `go test` and never mangles a command that merely
+// contains a "test" argument (make test, npm test, a wrapper script).
+func isGoTest(cmd []string) bool {
+	if len(cmd) < 2 || cmd[1] != "test" {
+		return false
+	}
+	switch filepath.Base(cmd[0]) {
+	case "go", "go.exe", "gotip", "gotip.exe":
+		return true
+	}
+	return false
 }
